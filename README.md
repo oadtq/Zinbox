@@ -6,6 +6,8 @@ Zinbox is a lightweight, native alternative to [Franz](https://meetfranz.com): W
 
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
 
+![Zinbox with Teams, WhatsApp, Messenger, Outlook, Gmail and Discord open as tabs](docs/screenshot.png)
+
 ## Features
 
 - **Tabs across the top**, one per service, with the site's icon, name and unread badge. Drag to reorder; right-click for reload, open in browser, notifications on/off, mute audio, disable, edit and remove.
