@@ -13,6 +13,8 @@ struct Recipe: Identifiable {
     let tint: NSColor
     /// JS function body returning a number. Empty: read "(3)" from the title.
     let unread: String
+    /// Teams is built for Chrome and scrolls poorly in WebKit.
+    var engine: Engine = .webkit
 
     var isCustom: Bool { id == Recipes.customID }
 }
@@ -42,7 +44,7 @@ enum Recipes {
                hosts: ["discord.com", "discordapp.com", "discord.gg"], tint: rgb(0x5865F2), unread: discord),
         Recipe(id: "teams", name: "Microsoft Teams", url: URL(string: "https://teams.microsoft.com/")!,
                hosts: ["teams.microsoft.com", "teams.live.com", "microsoft.com", "microsoftonline.com", "office.com", "live.com", "skype.com", "sharepoint.com", "teams.cloud.microsoft", "cloud.microsoft"],
-               tint: rgb(0x5B5FC7), unread: teams),
+               tint: rgb(0x5B5FC7), unread: teams, engine: .chromium),
         Recipe(id: "gmail", name: "Gmail", url: URL(string: "https://mail.google.com/mail/u/0/")!,
                hosts: ["mail.google.com", "accounts.google.com"], tint: rgb(0xEA4335), unread: gmail),
         Recipe(id: "googlechat", name: "Google Chat", url: URL(string: "https://chat.google.com/")!,

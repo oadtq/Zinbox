@@ -1,7 +1,9 @@
 import AppKit
+import ZinboxCEF
 
 MainActor.assumeIsolated {
-    let app = NSApplication.shared
+    // Chromium requires its NSApplication subclass; WebKit is happy with it too.
+    let app = ZBApplication.shared
     app.setActivationPolicy(.regular)
     app.delegate = AppDelegate.shared
     app.run()

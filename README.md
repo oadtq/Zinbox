@@ -2,7 +2,7 @@
 
 **All your messaging apps in one native macOS window.**
 
-Zinbox is a lightweight, native alternative to [Franz](https://meetfranz.com): WhatsApp, Slack, Teams, Gmail, Telegram, Discord and any other web app side by side in tabs, each with its own login. It is written in Swift with AppKit and uses the system WebKit engine — no Electron, no bundled Chromium, no account, no telemetry.
+Zinbox is a native alternative to [Franz](https://meetfranz.com): WhatsApp, Slack, Teams, Gmail, Telegram, Discord and any other web app side by side in tabs, each with its own login. It is written in Swift with AppKit. Services run in the system WebKit engine by default; sites built for Chrome (Microsoft Teams) run in an embedded Chromium instead. No Electron, no account, no telemetry.
 
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
 
@@ -16,14 +16,15 @@ Zinbox is a lightweight, native alternative to [Franz](https://meetfranz.com): W
 - **Always-on background services**: services keep running when their tab isn't visible or the window is closed, so unread counts and notifications keep working.
 - **Native notifications**: page notifications become macOS notifications; clicking one opens the service at that conversation. **Do Not Disturb** pauses them all.
 - **Unread badges** per tab, with the total on the Dock icon.
+- **Two engines**: WebKit (light, the default) or Chromium (for Chrome-tuned sites; Teams uses it by default). Choose per service in **Edit…**.
 - **Disable** a service to free its memory while keeping its login.
-- Sign-in popups stay inside the app; links to other sites open in your default browser.
+- **Links and popups open in your default browser.** Only sign-in windows (Google, Microsoft, SSO…) stay inside the app, so the login lands in that service.
 - Downloads, file uploads, camera and microphone, per-service zoom, Web Inspector, light and dark mode.
 
 ## Requirements
 
-- macOS 14 Sonoma or later
-- Xcode 16 or the Swift 6 toolchain (to build)
+- macOS 14 Sonoma or later, Apple silicon
+- Xcode 16 or the Swift 6 toolchain, plus `cmake` and `ninja` (`brew install cmake ninja`) to build
 
 ## Build and run
 
@@ -35,6 +36,8 @@ open build/Zinbox.app
 ```
 
 `./build.sh debug` builds faster while iterating. To install, drag `build/Zinbox.app` to `/Applications`.
+
+The first build downloads the [Chromium Embedded Framework](https://github.com/chromiumembedded/cef) (CEF, ~130 MB) into `vendor/cef` and builds its wrapper library (`scripts/fetch-cef.sh`). The app is about 320 MB, almost all of it Chromium; Chromium's processes only start once a service uses it.
 
 The build is ad-hoc signed. macOS may ask again for notification, camera or microphone permission after you rebuild.
 
@@ -59,14 +62,17 @@ The build is ad-hoc signed. macOS may ask again for notification, camera or micr
 | File | Role |
 |---|---|
 | `AppModel.swift` | The service list, selection, unread totals, persistence |
-| `ServiceController.swift` | One service's `WKWebView`: navigation, popups, downloads, crash recovery |
+| `ServiceController.swift` | One service's page (WebKit or Chromium): navigation, popups, downloads, crash recovery |
+| `Chromium.swift`, `Sources/ZinboxCEF/` | The Chromium engine: an Objective-C++ bridge to CEF, one `NSView` per page |
+| `Sources/ZinboxHelper/` | Chromium's helper process; injects Zinbox's scripts into pages |
 | `Scripts.swift` | Injected JS: Notification API bridge and unread counter |
 | `Recipes.swift` | Built-in services: start URL, hosts, unread reader |
 | `TabBar.swift`, `MainWindow.swift` | The window and its tab strip |
 | `Notifier.swift` | macOS notifications |
 
-- Each service gets a `WKWebsiteDataStore(forIdentifier:)`, so cookies and storage never mix between services.
-- Pages run with `inactiveSchedulingPolicy = .none`, so hidden tabs aren't throttled.
+- Each service gets its own `WKWebsiteDataStore(forIdentifier:)` or Chromium profile, so cookies and storage never mix between services. Switching a service's engine means signing in again.
+- Hidden tabs aren't throttled (`inactiveSchedulingPolicy = .none` in WebKit; background-throttling switches in Chromium).
+- Chromium runs sandboxed, with an external message pump driven by the main run loop.
 - WKWebView has no Web Notification API, so Zinbox injects a small `Notification` implementation into each page. It forwards notifications to an isolated script world, and only that world can talk to the app.
 - Unread counts come from a per-service DOM reader, falling back to the `(n)` in the page title.
 

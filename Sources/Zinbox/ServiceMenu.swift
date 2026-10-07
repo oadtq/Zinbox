@@ -12,7 +12,7 @@ enum ServiceMenu {
         menu.addItem(item("Reload", "arrow.clockwise", enabled: s.enabled) { AppModel.shared.controllers[id]?.reload() })
         menu.addItem(item("Go to Home Page", "house", enabled: s.enabled) { AppModel.shared.controllers[id]?.goHome() })
         menu.addItem(item("Open in Browser", "safari") {
-            let url = AppModel.shared.controllers[id]?.webView?.url ?? s.startURL
+            let url = AppModel.shared.controllers[id]?.currentURL ?? s.startURL
             if let url { NSWorkspace.shared.open(url) }
         })
         menu.addItem(.separator())

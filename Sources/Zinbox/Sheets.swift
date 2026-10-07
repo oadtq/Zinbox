@@ -269,6 +269,7 @@ final class EditServiceSheet: NSObject {
     private let notifications: NSButton
     private let badge: NSButton
     private let audio: NSButton
+    private let engine = NSPopUpButton()
 
     private init(_ s: Service) {
         id = s.id
@@ -306,7 +307,25 @@ final class EditServiceSheet: NSObject {
         }
         let nameRow = row("Name", nameField)
         let urlRow = row("URL", urlField)
-        let grid = NSStackView(views: [nameRow, urlRow])
+        // Engine: Safari's WebKit (light) or Chromium (for Chrome-tuned sites like Teams).
+        engine.addItems(withTitles: ["WebKit (Safari engine) — lighter", "Chromium — for sites built for Chrome"])
+        engine.selectItem(at: s.effectiveEngine == .chromium ? 1 : 0)
+        engine.setAccessibilityIdentifier("edit-engine")
+        let engineNote = NSTextField(labelWithString: "Changing the engine signs you out of this service.")
+        engineNote.font = .systemFont(ofSize: 11)
+        engineNote.textColor = .secondaryLabelColor
+        let engineLabel = NSTextField(labelWithString: "Engine")
+        engineLabel.alignment = .right
+        engineLabel.widthAnchor.constraint(equalToConstant: 40).isActive = true
+        let engineColumn = NSStackView(views: [engine, engineNote])
+        engineColumn.orientation = .vertical
+        engineColumn.alignment = .leading
+        engineColumn.spacing = 4
+        let engineRow = NSStackView(views: [engineLabel, engineColumn])
+        engineRow.orientation = .horizontal
+        engineRow.alignment = .firstBaseline
+        engineRow.spacing = 8
+        let grid = NSStackView(views: [nameRow, urlRow, engineRow])
         grid.orientation = .vertical
         grid.alignment = .leading
         grid.spacing = 8
@@ -362,6 +381,8 @@ final class EditServiceSheet: NSObject {
             s.notifications = self.notifications.state == .on
             s.showBadge = self.badge.state == .on
             s.audioMuted = self.audio.state == .on
+            let picked: Engine = self.engine.indexOfSelectedItem == 1 ? .chromium : .webkit
+            if picked != s.effectiveEngine { s.engine = picked }
         }
         close()
     }

@@ -6,6 +6,14 @@ import Foundation
 // A run with ZINBOX_PROBE set uses "Zinbox (<name>)" instead, so tests never
 // touch the real services or logins.
 
+/// The browser engine a service runs in.
+enum Engine: String, Codable {
+    /// The system's WebKit: light and efficient.
+    case webkit
+    /// Embedded Chromium: for sites tuned for Chrome, such as Teams.
+    case chromium
+}
+
 struct Service: Codable, Identifiable, Equatable {
     var id: UUID
     var recipe: String
@@ -20,6 +28,8 @@ struct Service: Codable, Identifiable, Equatable {
     var audioMuted = false
     var zoom: Double = 1
     var unread = 0
+    /// Nil: the recipe's default engine.
+    var engine: Engine?
 
     init(recipe: Recipe, name: String, url: String?) {
         id = UUID()
@@ -42,7 +52,10 @@ struct Service: Codable, Identifiable, Equatable {
         audioMuted = try c.decodeIfPresent(Bool.self, forKey: .audioMuted) ?? false
         zoom = try c.decodeIfPresent(Double.self, forKey: .zoom) ?? 1
         unread = try c.decodeIfPresent(Int.self, forKey: .unread) ?? 0
+        engine = try c.decodeIfPresent(Engine.self, forKey: .engine)
     }
+
+    var effectiveEngine: Engine { engine ?? Recipes.named(recipe)?.engine ?? .webkit }
 
     var startURL: URL? {
         if let url, let parsed = Service.parse(url) { return parsed }

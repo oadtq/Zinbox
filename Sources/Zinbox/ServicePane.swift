@@ -15,7 +15,7 @@ final class ServicePane: NSView {
     var retry: (() -> Void)?
     var enable: (() -> Void)?
 
-    private weak var webView: WKWebView?
+    private weak var webView: NSView?
     private let bar = ProgressLine()
     private var overlay: NSView?
     private var state: State = .page
@@ -50,7 +50,7 @@ final class ServicePane: NSView {
         layer?.backgroundColor = Theme.content.cgColor
     }
 
-    func host(_ view: WKWebView) {
+    func host(_ view: NSView) {
         webView?.removeFromSuperview()
         webView = view
         view.frame = bounds

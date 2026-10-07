@@ -107,9 +107,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     private func focusSelected() {
         guard focusedService != model.selected else { return }
         focusedService = model.selected
-        if let view = model.currentController?.webView, view.window != nil {
-            window?.makeFirstResponder(view)
-        }
+        model.currentController?.focusPage()
     }
 
     // MARK: - window

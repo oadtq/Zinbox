@@ -36,7 +36,8 @@ final class Probe {
             reply(state())
         case "add":
             let recipe = Recipes.named(cmd["recipe"] as? String ?? "custom") ?? Recipes.custom
-            model.add(recipe: recipe, name: cmd["name"] as? String ?? recipe.name, url: cmd["url"] as? String)
+            let added = model.add(recipe: recipe, name: cmd["name"] as? String ?? recipe.name, url: cmd["url"] as? String)
+            if let engine = (cmd["engine"] as? String).flatMap(Engine.init) { model.edit(added.id) { $0.engine = engine } }
             reply(state())
         case "select":
             if let target { model.select(target) }
@@ -55,6 +56,7 @@ final class Probe {
                     if let v = cmd["audioMuted"] as? Bool { s.audioMuted = v }
                     if let v = cmd["showBadge"] as? Bool { s.showBadge = v }
                     if let v = cmd["zoom"] as? Double { s.zoom = v }
+                    if let v = (cmd["engine"] as? String).flatMap(Engine.init) { s.engine = v }
                 }
             }
             reply(state())
@@ -65,6 +67,18 @@ final class Probe {
             if let target { model.move(target, to: cmd["to"] as? Int ?? 0) }
             reply(state())
         case "eval":
+            if let target, let chromium = model.controllers[target]?.chromium {
+                // Chromium returns nothing from ExecuteJavaScript; the script posts its answer back.
+                awaitingChromium = true
+                chromium.evaluateJavaScript("""
+                (async () => { let v; try { v = await (async () => { \(cmd["js"] as? String ?? "") })(); } catch (e) { v = 'error: ' + e; }
+                  __zinboxNative(JSON.stringify({ type: 'probe', value: String(v) })); })();
+                """)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                    if self.awaitingChromium { self.awaitingChromium = false; self.reply(["error": "no answer"]) }
+                }
+                return
+            }
             guard let target, let view = model.controllers[target]?.webView else { return reply(["error": "no web view"]) }
             let world: WKContentWorld = (cmd["world"] as? String) == "zinbox" ? Web.world : .page
             view.callAsyncJavaScript(cmd["js"] as? String ?? "", arguments: [:], in: nil, in: world) { result in
@@ -195,6 +209,9 @@ final class Probe {
                 NSApp.sendEvent(e)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.reply(self.state()) }
+        case "quit":
+            reply(["ok": true])
+            DispatchQueue.main.async { NSApp.terminate(nil) }
         case "click-notification":
             if let target { model.open(service: target, note: cmd["note"] as? String) }
             reply(state())
@@ -204,6 +221,16 @@ final class Probe {
     }
 
     static var pressed: NSView?
+    private var awaitingChromium = false
+    private var outside: [String] = []
+
+    func openedOutside(_ url: URL) { outside.append(url.absoluteString) }
+
+    func chromiumResult(_ value: String) {
+        guard awaitingChromium else { return }
+        awaitingChromium = false
+        reply(["result": value])
+    }
 
     private func state() -> [String: Any] {
         let model = AppModel.shared
@@ -218,7 +245,8 @@ final class Probe {
             return [
                 "id": s.id.uuidString, "name": s.name, "recipe": s.recipe, "enabled": s.enabled, "unread": s.unread,
                 "notifications": s.notifications, "audioMuted": s.audioMuted, "zoom": s.zoom, "store": s.storeID.uuidString,
-                "hasWebView": c?.webView != nil, "url": c?.webView?.url?.absoluteString ?? "",
+                "hasWebView": c?.hasPage ?? false, "url": c?.currentURL?.absoluteString ?? "",
+                "engine": c?.runningEngine?.rawValue ?? "", "wantedEngine": s.effectiveEngine.rawValue,
                 "loading": c?.isLoading ?? false, "failure": c?.failure ?? "",
                 "paneHidden": c?.pane.isHidden ?? true, "paneInWindow": c?.pane.window != nil,
                 "tab": frames[s.id].map(topLeft) ?? [:],
@@ -246,6 +274,7 @@ final class Probe {
             "buttons": buttons,
             "lights": lights,
             "notifications": Notifier.shared.posted,
+            "openedOutside": outside,
             "notificationStatus": Notifier.shared.status.rawValue,
             "firstResponder": window?.firstResponder.map { String(describing: type(of: $0)) } ?? "",
             "windows": NSApp.windows.filter(\.isVisible).map { "\(type(of: $0)):\($0.title):\(Int($0.frame.width))x\(Int($0.frame.height))" },

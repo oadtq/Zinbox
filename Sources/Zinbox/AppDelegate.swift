@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import ZinboxCEF
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -26,6 +27,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showWindow()
         return true
     }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        AppModel.shared.save()
+        guard ZBChromium.isRunning(), !chromiumDown else { return .terminateNow }
+        // Chromium must close its pages and shut down before the process exits.
+        // Do that with the run loop running normally (AppKit's terminate-later
+        // wait doesn't pump Chromium), then quit for real.
+        main?.window?.orderOut(nil)
+        ZBChromium.shutdown { [weak self] in
+            self?.chromiumDown = true
+            NSApp.terminate(nil)
+        }
+        return .terminateCancel
+    }
+
+    private var chromiumDown = false
 
     func applicationWillTerminate(_ notification: Notification) {
         AppModel.shared.save()
@@ -93,12 +110,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let view = NSMenu(title: "View")
         view.addItem(ClosureItem(title: "Reload Service", key: "r") { AppModel.shared.currentController?.reload() })
-        let hard = ClosureItem(title: "Reload Ignoring Cache", key: "R") { AppModel.shared.currentController?.webView?.reloadFromOrigin() }
+        let hard = ClosureItem(title: "Reload Ignoring Cache", key: "R") { AppModel.shared.currentController?.reloadIgnoringCache() }
         view.addItem(hard)
         view.addItem(ClosureItem(title: "Go to Home Page", key: "H") { AppModel.shared.currentController?.goHome() })
         view.addItem(.separator())
-        view.addItem(ClosureItem(title: "Back", key: "[") { AppModel.shared.currentController?.webView?.goBack() })
-        view.addItem(ClosureItem(title: "Forward", key: "]") { AppModel.shared.currentController?.webView?.goForward() })
+        view.addItem(ClosureItem(title: "Back", key: "[") { AppModel.shared.currentController?.goBack() })
+        view.addItem(ClosureItem(title: "Forward", key: "]") { AppModel.shared.currentController?.goForward() })
         view.addItem(.separator())
         view.addItem(ClosureItem(title: "Actual Size", key: "0") { Self.zoom(to: 1) })
         view.addItem(ClosureItem(title: "Zoom In", key: "+") { Self.zoom(by: 0.1) })
@@ -201,11 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private static func toggleInspector() {
-        guard let view = AppModel.shared.currentController?.webView else { return }
-        let getter = NSSelectorFromString("_inspector")
-        guard view.responds(to: getter), let inspector = view.perform(getter)?.takeUnretainedValue() as? NSObject else { return }
-        let show = NSSelectorFromString("show")
-        if inspector.responds(to: show) { inspector.perform(show) }
+        AppModel.shared.currentController?.showInspector()
     }
 }
 

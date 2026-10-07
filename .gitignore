@@ -3,3 +3,4 @@ references/
 build/
 .swiftpm/
 .DS_Store
+vendor/

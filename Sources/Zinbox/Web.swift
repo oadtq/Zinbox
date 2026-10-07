@@ -59,17 +59,22 @@ final class Downloads: NSObject, WKDownloadDelegate {
 
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
                   completionHandler: @escaping (URL?) -> Void) {
-        let folder = Self.folder
-        let name = suggestedFilename.isEmpty ? "download" : suggestedFilename.replacingOccurrences(of: "/", with: "-")
         let key = ObjectIdentifier(download)
+        destination(for: suggestedFilename) { target in
+            self.active[key] = (download, target)
+            completionHandler(target)
+        }
+    }
+
+    /// A free file name in the Downloads folder. Either engine.
+    func destination(for suggestedName: String, done: @escaping (URL) -> Void) {
+        let folder = Self.folder
+        let name = suggestedName.isEmpty ? "download" : suggestedName.replacingOccurrences(of: "/", with: "-")
         // The first touch of ~/Downloads can wait on macOS's privacy prompt;
         // keep that wait off the main thread so the window stays responsive.
         DispatchQueue.global(qos: .userInitiated).async {
             let target = Self.free(name, in: folder)
-            DispatchQueue.main.async {
-                self.active[key] = (download, target)
-                completionHandler(target)
-            }
+            DispatchQueue.main.async { done(target) }
         }
     }
 
@@ -117,15 +122,20 @@ enum Permissions {
 
     static func ask(origin: String, type: WKMediaCaptureType, service: String, window: NSWindow?,
                     decision: @escaping (WKPermissionDecision) -> Void) {
-        let what: String
-        switch type {
-        case .camera: what = "camera"
-        case .microphone: what = "microphone"
-        default: what = "camera and microphone"
-        }
+        ask(origin: origin, video: type != .microphone, audio: type != .camera, screen: false,
+            service: service, window: window) { decision($0 ? .grant : .deny) }
+    }
+
+    static func ask(origin: String, video: Bool, audio: Bool, screen: Bool, service: String, window: NSWindow?,
+                    decision: @escaping (Bool) -> Void) {
+        var parts: [String] = []
+        if video { parts.append("camera") }
+        if audio { parts.append("microphone") }
+        if screen { parts.append("screen") }
+        let what = parts.isEmpty ? "camera and microphone" : parts.joined(separator: " and ")
         let key = "\(service)|\(origin)|\(what)"
         if let known = answers[key] {
-            decision(known ? .grant : .deny)
+            decision(known)
             return
         }
         let alert = Dialogs.alert(title: "Allow \(service) to use your \(what)?",
@@ -134,10 +144,11 @@ enum Permissions {
         Dialogs.run(alert, in: window) { response in
             let granted = response == .alertFirstButtonReturn
             answers[key] = granted
-            guard granted else { return decision(.deny) }
-            // Make sure macOS has asked too, then answer the page.
-            let media: [AVMediaType] = type == .camera ? [.video] : type == .microphone ? [.audio] : [.video, .audio]
-            requestSystem(media) { ok in decision(ok ? .grant : .deny) }
+            guard granted else { return decision(false) }
+            // Make sure macOS has asked too, then answer the page. (Screen
+            // recording permission is asked by macOS itself when sharing starts.)
+            let media: [AVMediaType] = (video ? [.video] : []) + (audio ? [.audio] : [])
+            requestSystem(media) { ok in decision(ok) }
         }
     }
 
