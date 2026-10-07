@@ -60,9 +60,23 @@ fi
 
 ICONSET="build/AppIcon.iconset"
 rm -rf "$ICONSET"
-swift Icon/icon.swift "$ICONSET" > /dev/null
+GLYPH="build/glyph.png"
+swift Icon/icon.swift "$ICONSET" "$GLYPH" > /dev/null
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
-rm -rf "$ICONSET"
+
+# macOS 26+ shows plain bitmap icons shrunk onto a grey plate. An Icon
+# Composer icon (black fill + the bubbles layer), compiled to Assets.car and
+# named by CFBundleIconName, gets the native shape. The .icns stays for older
+# systems.
+CATALOG="build/AppIcon.icon"
+rm -rf "$CATALOG"
+mkdir -p "$CATALOG/Assets"
+mv "$GLYPH" "$CATALOG/Assets/glyph.png"
+cp Icon/icon.json "$CATALOG/icon.json"
+# actool runs in a helper process with its own working directory: absolute paths only.
+xcrun actool --compile "$PWD/$APP/Contents/Resources" --platform macosx --minimum-deployment-target "$MINIMUM" \
+  --app-icon AppIcon --output-partial-info-plist "$PWD/build/AssetsInfo.plist" "$PWD/$CATALOG" > /dev/null
+rm -rf "$ICONSET" "$CATALOG" build/AssetsInfo.plist
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -77,6 +91,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$BUILD</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleIconName</key><string>AppIcon</string>
   <key>NSPrincipalClass</key><string>ZBApplication</string>
   <key>LSMinimumSystemVersion</key><string>$MINIMUM</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
