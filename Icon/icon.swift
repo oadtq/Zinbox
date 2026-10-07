@@ -1,26 +1,10 @@
 // App icon: three stacked chat bubbles — many inboxes, one window — in white
-// on a black squircle. Drawn, not exported.
+// on black, full-bleed (macOS masks it to the app-icon shape). Drawn, not exported.
 
 import AppKit
 
 let out = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? "AppIcon.iconset")
 try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
-
-/// A continuous-corner squircle (superellipse).
-func squircle(_ r: NSRect) -> NSBezierPath {
-    let path = NSBezierPath()
-    let n = 5.0, steps = 720
-    for i in 0...steps {
-        let t = Double(i) / Double(steps) * 2 * .pi
-        let c = cos(t), s = sin(t)
-        let x = pow(abs(c), 2 / n) * (c < 0 ? -1 : 1)
-        let y = pow(abs(s), 2 / n) * (s < 0 ? -1 : 1)
-        let p = NSPoint(x: r.midX + x * r.width / 2, y: r.midY + y * r.height / 2)
-        i == 0 ? path.move(to: p) : path.line(to: p)
-    }
-    path.close()
-    return path
-}
 
 /// A rounded speech bubble with a short tail at the bottom left.
 func bubble(_ r: NSRect, radius: CGFloat, tail: CGFloat) -> [NSBezierPath] {
@@ -39,33 +23,18 @@ func bubble(_ r: NSRect, radius: CGFloat, tail: CGFloat) -> [NSBezierPath] {
     return [p, t]
 }
 
-func draw(_ size: CGFloat) -> NSImage {
+func draw(_ size: CGFloat, background: Bool = true) -> NSImage {
     NSImage(size: NSSize(width: size, height: size), flipped: false) { _ in
-        let s = size / 1024
-        let plate = NSRect(x: 100 * s, y: 100 * s, width: 824 * s, height: 824 * s)
-        let shape = squircle(plate)
-
-        // Plate: near-black with a soft top light, and a drop shadow.
-        NSGraphicsContext.saveGraphicsState()
-        let shadow = NSShadow()
-        shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
-        shadow.shadowBlurRadius = 28 * s
-        shadow.shadowOffset = NSSize(width: 0, height: -12 * s)
-        shadow.set()
-        NSColor.black.setFill()
-        shape.fill()
-        NSGraphicsContext.restoreGraphicsState()
-
-        NSGraphicsContext.saveGraphicsState()
-        shape.addClip()
-        NSGradient(colors: [NSColor(white: 0.20, alpha: 1), NSColor(white: 0.04, alpha: 1)])?
-            .draw(in: plate, angle: -90)
-        NSGraphicsContext.restoreGraphicsState()
-
-        // Hairline rim so it holds its edge on a dark Dock.
-        NSColor(white: 1, alpha: 0.10).setStroke()
-        shape.lineWidth = max(1, 3 * s)
-        shape.stroke()
+        // Full-bleed artwork: macOS applies the rounded app-icon mask itself.
+        // (Drawing our own rounded plate makes macOS 26+ shrink the icon onto
+        // a grey backing plate.) The motif uses an 824-point design grid
+        // scaled up to the full canvas.
+        let s = size / 824
+        let plate = NSRect(x: 0, y: 0, width: size, height: size)
+        if background {
+            NSGradient(colors: [NSColor(white: 0.20, alpha: 1), NSColor(white: 0.04, alpha: 1)])?
+                .draw(in: plate, angle: -90)
+        }
 
         // Two bubbles behind, then the front one.
         let w: CGFloat = 430 * s, h: CGFloat = 320 * s, radius: CGFloat = 112 * s
@@ -82,8 +51,13 @@ func draw(_ size: CGFloat) -> NSImage {
         for part in gap {
             NSGraphicsContext.saveGraphicsState()
             part.addClip()
-            NSGradient(colors: [NSColor(white: 0.20, alpha: 1), NSColor(white: 0.04, alpha: 1)])?
-                .draw(in: plate, angle: -90)
+            if background {
+                NSGradient(colors: [NSColor(white: 0.20, alpha: 1), NSColor(white: 0.04, alpha: 1)])?
+                    .draw(in: plate, angle: -90)
+            } else {
+                NSGraphicsContext.current?.compositingOperation = .clear
+                plate.fill()
+            }
             NSGraphicsContext.restoreGraphicsState()
         }
 
@@ -114,6 +88,13 @@ func write(_ image: NSImage, to url: URL, pixels: Int) {
     image.draw(in: NSRect(x: 0, y: 0, width: pixels, height: pixels))
     NSGraphicsContext.restoreGraphicsState()
     try? rep.representation(using: .png, properties: [:])?.write(to: url)
+}
+
+// `icon.swift <iconset dir> [glyph.png]`: the iconset for older macOS, and
+// optionally the bubbles alone on transparency, the foreground layer of the
+// Icon Composer icon that macOS 26+ uses.
+if CommandLine.arguments.count > 2 {
+    write(draw(1024, background: false), to: URL(fileURLWithPath: CommandLine.arguments[2]), pixels: 1024)
 }
 
 for points in [16, 32, 128, 256, 512] {
