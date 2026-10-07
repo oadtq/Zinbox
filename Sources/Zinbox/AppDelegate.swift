@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = buildMenu()
         Notifier.shared.start()
+        SecureInput.start()
         let controller = MainWindowController()
         main = controller
         controller.showWindow(nil)

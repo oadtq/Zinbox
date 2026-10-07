@@ -38,7 +38,28 @@ enum Chromium {
     \(wrap(Scripts.bridge))
     """
 
-    static func mainScript(_ unread: String) -> String { wrap(Scripts.unread(unread)) }
+    static func mainScript(_ unread: String) -> String { wrap(Scripts.unread(unread)) + "\n" + wrap(passwordFocus) }
+
+    /// Reports whether a password field has focus, so Zinbox can keep macOS
+    /// Secure Input off the rest of the time (see SecureInput).
+    private static let passwordFocus = """
+    (function () {
+      var last = null;
+      function report() {
+        var el = document.activeElement;
+        while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
+        var on = !!(el && el.tagName === 'INPUT' && String(el.type).toLowerCase() === 'password');
+        if (on === last) return;
+        last = on;
+        try { webkit.messageHandlers.\(Scripts.handler).postMessage({ type: 'secure', on: on }); } catch (e) {}
+      }
+      document.addEventListener('focusin', report, true);
+      document.addEventListener('focusout', function () { setTimeout(report, 0); }, true);
+      document.addEventListener('DOMContentLoaded', report);
+      window.addEventListener('pagehide', function () { last = null; report(); });
+      report();
+    })();
+    """
 
     private static func wrap(_ source: String) -> String {
         """
@@ -64,6 +85,7 @@ extension ServiceController: @preconcurrency ZBChromiumDelegate {
 
     func chromiumDidFinishLoad(_ view: ZBChromiumView) {
         clearFailure()
+        SecureInput.reconcile()
     }
 
     func chromium(_ view: ZBChromiumView, loadFailed message: String) {

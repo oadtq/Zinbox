@@ -98,6 +98,7 @@ final class ServiceController: NSObject {
         for popup in popups { popup.close() }
         popups.removeAll()
         if let view = chromium {
+            SecureInput.forget(id)
             view.delegate = nil
             view.close()
             view.removeFromSuperview()
@@ -325,6 +326,8 @@ final class ServiceController: NSObject {
         case "count":
             let n = (dict["count"] as? NSNumber)?.intValue ?? 0
             delegate?.service(self, unread: max(0, n))
+        case "secure":
+            SecureInput.setPasswordFocused(id, (dict["on"] as? Bool) ?? false)
         case "probe":
             Probe.shared.chromiumResult(dict["value"] as? String ?? "")
         case "notify":
