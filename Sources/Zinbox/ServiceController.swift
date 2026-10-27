@@ -202,6 +202,7 @@ final class ServiceController: NSObject {
     private func makeWebView() -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = WKWebsiteDataStore(forIdentifier: service.storeID)
+        SessionCookies.keep(config.websiteDataStore, id: service.storeID)
         Web.prepare(config)
 
         let content = config.userContentController

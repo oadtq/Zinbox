@@ -45,6 +45,49 @@ enum Web {
     }
 }
 
+// MARK: - Session cookies
+
+/// WebKit drops session cookies (no expiry) when the app quits, which signs
+/// out sites like Messenger that keep their login in one. Chromium keeps them
+/// (persist_session_cookies), so do the same here: give each a long expiry as
+/// soon as it is set, and WebKit writes it to disk like any other cookie.
+@MainActor
+final class SessionCookies: NSObject, WKHTTPCookieStoreObserver {
+    private static var keepers: [UUID: SessionCookies] = [:]
+    private static let lifetime: TimeInterval = 400 * 24 * 3600
+
+    private let store: WKHTTPCookieStore
+
+    private init(_ store: WKHTTPCookieStore) {
+        self.store = store
+        super.init()
+    }
+
+    /// Watches one service's cookie store. Safe to call more than once.
+    static func keep(_ dataStore: WKWebsiteDataStore, id: UUID) {
+        guard keepers[id] == nil else { return }
+        let keeper = SessionCookies(dataStore.httpCookieStore)
+        keepers[id] = keeper
+        keeper.store.add(keeper)
+        keeper.persist()
+    }
+
+    nonisolated func cookiesDidChange(in cookieStore: WKHTTPCookieStore) {
+        Task { @MainActor in self.persist() }
+    }
+
+    private func persist() {
+        store.getAllCookies { [store] cookies in
+            for cookie in cookies where cookie.isSessionOnly {
+                guard var props = cookie.properties else { continue }
+                props[.expires] = Date().addingTimeInterval(Self.lifetime)
+                props.removeValue(forKey: .discard)
+                if let kept = HTTPCookie(properties: props) { store.setCookie(kept) }
+            }
+        }
+    }
+}
+
 // MARK: - Downloads
 
 @MainActor
