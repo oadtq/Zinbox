@@ -15,6 +15,10 @@ struct Recipe: Identifiable {
     let unread: String
     /// Teams is built for Chrome and scrolls poorly in WebKit.
     var engine: Engine = .webkit
+    /// JS function body returning the unread items on screen, as
+    /// [{id, title, body}]. For sites whose own notifications never reach us:
+    /// Zinbox notifies about new ones itself. Empty: rely on the page.
+    var arrivals: String = ""
 
     var isCustom: Bool { id == Recipes.customID }
 }
@@ -51,7 +55,7 @@ enum Recipes {
                hosts: ["chat.google.com", "mail.google.com", "accounts.google.com"], tint: rgb(0x00AC47), unread: ""),
         Recipe(id: "outlook", name: "Outlook", url: URL(string: "https://outlook.office.com/mail/")!,
                hosts: ["outlook.office.com", "outlook.office365.com", "outlook.live.com", "office.com", "live.com", "microsoftonline.com", "outlook.cloud.microsoft", "cloud.microsoft"],
-               tint: rgb(0x0078D4), unread: outlook),
+               tint: rgb(0x0078D4), unread: outlook, arrivals: outlookArrivals),
         Recipe(id: "zalo", name: "Zalo", url: URL(string: "https://chat.zalo.me/")!,
                hosts: ["zalo.me", "zdn.vn", "zaloapp.com"], tint: rgb(0x0068FF), unread: zalo),
         Recipe(id: "linkedin", name: "LinkedIn", url: URL(string: "https://www.linkedin.com/messaging/")!,
@@ -133,13 +137,25 @@ enum Recipes {
       return t ? parseInt(t[1].replace(/[.,]/g, ''), 10) : 0;
     """
 
+    // The folder's tooltip reads "Inbox - 9,638 items (1,855 unread)".
     private static let outlook = """
-      const inbox = document.querySelector('[data-folder-name="inbox"] [data-unread-count], div[title^="Inbox"] span[class*="unread" i]');
-      if (inbox) {
-        const v = parseInt(inbox.getAttribute('data-unread-count') || inbox.textContent, 10);
-        if (!isNaN(v)) return v;
-      }
-      return 0;
+      const inbox = document.querySelector('[role="treeitem"][data-folder-name="inbox"][title]');
+      const m = inbox && inbox.getAttribute('title').match(/\\(([\\d.,]+) unread\\)/);
+      return m ? parseInt(m[1].replace(/[.,]/g, ''), 10) : 0;
+    """
+
+    // Outlook notifies through Web Push, which WKWebView lacks, so read new
+    // mail off the message list instead. Rows are [role=option] with an
+    // aria-label starting "Unread"; the text is sender, subject, time, preview.
+    private static let outlookArrivals = """
+      return Array.from(document.querySelectorAll('[role="option"][data-convid]')).filter(function (row) {
+        return /^Unread\\b/.test(row.getAttribute('aria-label') || '');
+      }).map(function (row) {
+        const lines = (row.innerText || '').split('\\n').map(function (l) { return l.trim(); }).filter(Boolean);
+        // Skip the avatar initials when present.
+        if (lines.length > 3 && lines[0].length <= 3) lines.shift();
+        return { id: row.getAttribute('data-convid'), title: lines[0] || 'New email', body: lines[1] || '' };
+      });
     """
 
     private static let zalo = """

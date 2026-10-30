@@ -10,7 +10,9 @@ import Foundation
 enum Scripts {
     static let handler = "zinbox"
 
-    static func unread(_ body: String) -> String {
+    /// Counts unread, and with `arrivals`, notifies about unread items that
+    /// appear while the count goes up (not ones that load in when scrolling).
+    static func unread(_ body: String, arrivals: String = "") -> String {
         """
         (function () {
           if (window.__zinboxCount) return;
@@ -27,8 +29,40 @@ enum Scripts {
             } catch (e) {}
             return fromTitle();
           }
+          var seen = null;
+          var armed = 0;
+          var told = true;
+          function notify(title, body) {
+            try { webkit.messageHandlers.\(handler).postMessage({ type: 'notify', id: '', title: title, body: body }); } catch (e) {}
+          }
+          // The count can move a moment before the new row shows up, so stay
+          // armed for a few seconds after it rises.
+          function arrived(rose) {
+            \(arrivals.isEmpty ? "return;" : "")
+            var items;
+            try { items = (function () { \(arrivals.isEmpty ? "return [];" : arrivals) })() || []; } catch (e) { return; }
+            if (seen === null) {
+              if (!items.length) return;
+              seen = {};
+            } else if (rose) {
+              armed = Date.now() + 10000;
+              told = false;
+            }
+            var live = Date.now() < armed;
+            // Nothing new in view (another folder is open, say): still say so.
+            if (!live && !told) { told = true; notify('', 'New message'); }
+            items.forEach(function (it) {
+              if (!it || !it.id || seen[it.id]) return;
+              seen[it.id] = true;
+              if (live) {
+                told = true;
+                notify(String(it.title || ''), String(it.body || ''));
+              }
+            });
+          }
           function tick() {
             var n = Math.max(0, read());
+            arrived(last >= 0 && n > last);
             if (n !== last) {
               last = n;
               try { webkit.messageHandlers.\(handler).postMessage({ type: 'count', count: n }); } catch (e) {}

@@ -38,7 +38,7 @@ enum Chromium {
     \(wrap(Scripts.bridge))
     """
 
-    static func mainScript(_ unread: String) -> String { wrap(Scripts.unread(unread)) + "\n" + wrap(passwordFocus) }
+    static func mainScript(_ unread: String, arrivals: String = "") -> String { wrap(Scripts.unread(unread, arrivals: arrivals)) + "\n" + wrap(passwordFocus) }
 
     /// Reports whether a password field has focus, so Zinbox can keep macOS
     /// Secure Input off the rest of the time (see SecureInput).

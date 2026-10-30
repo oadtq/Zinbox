@@ -78,7 +78,7 @@ final class ServiceController: NSObject {
         guard service.enabled, !hasPage else { return }
         if service.effectiveEngine == .chromium, Chromium.start(), let url = service.startURL {
             let view = ZBChromiumView(profile: service.storeID.uuidString, url: url,
-                                      pageScript: Chromium.pageScript, mainFrameScript: Chromium.mainScript(recipe.unread))
+                                      pageScript: Chromium.pageScript, mainFrameScript: Chromium.mainScript(recipe.unread, arrivals: recipe.arrivals))
             view.delegate = self
             view.setZoom(service.zoom)
             chromium = view
@@ -209,7 +209,7 @@ final class ServiceController: NSObject {
         content.add(WeakHandler(self), contentWorld: Web.world, name: Scripts.handler)
         content.addUserScript(WKUserScript(source: Scripts.bridge, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: Web.world))
         content.addUserScript(WKUserScript(source: Scripts.notifications, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page))
-        content.addUserScript(WKUserScript(source: Scripts.unread(recipe.unread), injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: Web.world))
+        content.addUserScript(WKUserScript(source: Scripts.unread(recipe.unread, arrivals: recipe.arrivals), injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: Web.world))
 
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = self
