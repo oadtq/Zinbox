@@ -2,11 +2,23 @@
 
 **All your messaging apps in one native macOS window.**
 
-Zinbox is a native alternative to [Franz](https://meetfranz.com): WhatsApp, Slack, Teams, Gmail, Telegram, Discord and any other web app side by side in tabs, each with its own login. It is written in Swift with AppKit. Services run in the system WebKit engine by default; sites built for Chrome (Microsoft Teams) run in an embedded Chromium instead. No Electron, no account, no telemetry.
+Zinbox puts WhatsApp, Slack, Teams, Gmail, Telegram, Discord and any other web app side by side in tabs, each with its own login. It is written in Swift with AppKit. Services run in the system WebKit engine by default; sites built for Chrome (Microsoft Teams) run in an embedded Chromium instead. No Electron, no account, no telemetry.
 
-![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
+![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black) ![Apple silicon](https://img.shields.io/badge/Apple%20silicon-arm64-black) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
 
 ![Zinbox with Teams, WhatsApp, Messenger, Outlook, Gmail and Discord open as tabs](docs/screenshot.png)
+
+## Download
+
+Get the latest `Zinbox-<version>-arm64.zip` from [Releases](https://github.com/oadtq/Zinbox/releases), unzip it and drag `Zinbox.app` to `/Applications`.
+
+Zinbox runs on **Apple silicon Macs only** (M1 and later). Intel Macs aren't supported: the bundled Chromium is the arm64 build.
+
+The app is ad-hoc signed, not notarized, so macOS blocks it on first launch. Open it once with right-click → **Open**, or clear the quarantine flag:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Zinbox.app
+```
 
 ## Features
 
@@ -14,7 +26,7 @@ Zinbox is a native alternative to [Franz](https://meetfranz.com): WhatsApp, Slac
 - **Built-in services**: WhatsApp, Messenger, Telegram, Slack, Discord, Microsoft Teams, Gmail, Google Chat, Outlook, Zalo, LinkedIn, Instagram — plus **any website** by URL.
 - **Multiple accounts**: every service has its own isolated website data store, so you can add the same service twice and stay signed in to both.
 - **Always-on background services**: services keep running when their tab isn't visible or the window is closed, so unread counts and notifications keep working.
-- **Native notifications**: page notifications become macOS notifications; clicking one opens the service at that conversation. **Do Not Disturb** pauses them all.
+- **Native notifications**: page notifications become macOS notifications (Outlook, which only notifies through Web Push, is watched for new mail instead); clicking one opens the service at that conversation. **Do Not Disturb** pauses them all.
 - **Unread badges** per tab, with the total on the Dock icon.
 - **Two engines**: WebKit (light, the default) or Chromium (for Chrome-tuned sites; Teams uses it by default). Choose per service in **Edit…**.
 - **Disable** a service to free its memory while keeping its login.
@@ -23,7 +35,7 @@ Zinbox is a native alternative to [Franz](https://meetfranz.com): WhatsApp, Slac
 
 ## Requirements
 
-- macOS 14 Sonoma or later, Apple silicon
+- macOS 14 Sonoma or later on an Apple silicon Mac (arm64 only)
 - Xcode 16 or the Swift 6 toolchain, plus `cmake` and `ninja` (`brew install cmake ninja`) to build
 
 ## Build and run
@@ -66,7 +78,7 @@ The build is ad-hoc signed. macOS may ask again for notification, camera or micr
 | `Chromium.swift`, `Sources/ZinboxCEF/` | The Chromium engine: an Objective-C++ bridge to CEF, one `NSView` per page |
 | `Sources/ZinboxHelper/` | Chromium's helper process; injects Zinbox's scripts into pages |
 | `Scripts.swift` | Injected JS: Notification API bridge and unread counter |
-| `Recipes.swift` | Built-in services: start URL, hosts, unread reader |
+| `Recipes.swift` | Built-in services: start URL, hosts, unread and new-message readers |
 | `TabBar.swift`, `MainWindow.swift` | The window and its tab strip |
 | `Notifier.swift` | macOS notifications |
 
@@ -75,12 +87,14 @@ The build is ad-hoc signed. macOS may ask again for notification, camera or micr
 - Chromium runs sandboxed, with an external message pump driven by the main run loop.
 - WKWebView has no Web Notification API, so Zinbox injects a small `Notification` implementation into each page. It forwards notifications to an isolated script world, and only that world can talk to the app.
 - Unread counts come from a per-service DOM reader, falling back to the `(n)` in the page title.
+- Some sites notify only through Web Push, which WKWebView doesn't support (Outlook does this). For those, a recipe can list the unread items on screen; when the count rises, Zinbox posts a notification for the new ones itself.
+- WebKit forgets session cookies when the app quits, so Zinbox gives them an expiry as they are set and logins such as Messenger's survive a restart (Chromium is set to keep them already).
 
 Settings are stored in `~/Library/Application Support/Zinbox/services.json`.
 
 ## Adding a service
 
-Add an entry to `Recipes.all` in `Sources/Zinbox/Recipes.swift`: an id, name, start URL, the hosts that belong to it, a brand colour, and optionally a JS snippet that returns the unread count. Pull requests are welcome.
+Add an entry to `Recipes.all` in `Sources/Zinbox/Recipes.swift`: an id, name, start URL, the hosts that belong to it, a brand colour, optionally a JS snippet that returns the unread count, and for sites whose own notifications never reach the app, one that lists the unread items (`arrivals`). Pull requests are welcome.
 
 ## Testing
 
@@ -94,4 +108,4 @@ Issues and pull requests are welcome. Please keep the app dependency-free and na
 
 [MIT](LICENSE) © 2026 Bao Tran
 
-Zinbox is not affiliated with Franz or with any of the services it can display. All trademarks belong to their respective owners.
+Zinbox is not affiliated with any of the services it can display. All trademarks belong to their respective owners.
